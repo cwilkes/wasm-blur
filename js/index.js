@@ -1,7 +1,21 @@
+let rustPromise = import("../pkg/index.js");
+let wasmPromise = import ("../pkg/index_bg.wasm");
 
-const runWasm = async() => {
-    let rust = await import("../pkg/index.js");
-    let wasm = await import ("../pkg/index_bg.wasm");
+
+function handleFiles() {
+    const file = this.files[0];
+    const reader = new FileReader();
+    reader.onload = function () {
+        console.log("res", reader.result.length);
+    }
+    reader.readAsBinaryString(file);
+}
+document.getElementById("file_upload").addEventListener("change", handleFiles, false);
+
+const doShade = async () => {
+
+    let rust = await rustPromise;
+    let wasm = await wasmPromise;
 
     let rustMemory = new Uint8Array(wasm.memory.buffer);
 
@@ -16,7 +30,7 @@ const runWasm = async() => {
         bufferPointer + width * height * 4
     );
 
-    const canvasImageData = ctx.createImageData( width, height );
+    const canvasImageData = ctx.createImageData(width, height);
 
     var row, col;
     var index = 0;
@@ -32,11 +46,38 @@ const runWasm = async() => {
         }
     }
 
+    for (row = height / 4 ; row < 3*height/4; row++) {
+        index = 4 * row * height + 4 * width / 4;
+        imageDataArray[index + 0] = 0;
+        imageDataArray[index + 1] = 0;
+        imageDataArray[index + 2] = 0;
+        imageDataArray[index + 4 * width/2 + 0] = 0;
+        imageDataArray[index + 4 * width/2 + 1] = 0;
+        imageDataArray[index + 4 * width/2 + 2] = 0;
+    }
+    for (col = width / 4; col < 3 * width / 4; col++) {
+        row = height / 4;
+        index = 4 * row * height + 4 * col;
+        imageDataArray[index + 0] = 0;
+        imageDataArray[index + 1] = 0;
+        imageDataArray[index + 2] = 0;
+        row = 3 * height / 4;
+        index = 4 * row * height + 4 * col;
+        imageDataArray[index + 0] = 0;
+        imageDataArray[index + 1] = 0;
+        imageDataArray[index + 2] = 0;
+
+
+    }
+
 
     canvasImageData.data.set(imageDataArray);
     ctx.clearRect(0, 0, width, height);
 
     ctx.putImageData(canvasImageData, 0, 0);
+
+    rust.save_image(imageDataArray);
+
 
     // make a box around canvas to more easily see it
     ctx.beginPath();
@@ -46,4 +87,35 @@ const runWasm = async() => {
     ctx.stroke();
 };
 
-runWasm();
+const doBlur = async () => {
+
+    let rust = await rustPromise;
+    let wasm = await wasmPromise;
+
+    rust.blur_all();
+
+    let rustMemory = new Uint8Array(wasm.memory.buffer);
+
+    let bufferPointer = rust.get_output_buffer_pointer();
+
+    const canvasElement = document.querySelector("canvas");
+    const ctx = canvasElement.getContext("2d");
+    const width = canvasElement.width;
+    const height = canvasElement.height;
+    const imageDataArray = rustMemory.slice(
+        bufferPointer,
+        bufferPointer + width * height * 4
+    );
+    const canvasImageData = ctx.createImageData(width, height);
+
+    canvasImageData.data.set(imageDataArray);
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.putImageData(canvasImageData, 0, 0);
+
+};
+
+doShade().then(_ => {
+    setInterval(doBlur,10000);
+}
+);

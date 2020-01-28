@@ -19,7 +19,7 @@ static mut OUTPUT_BUFFER: [u8; OUTPUT_BUFFER_SIZE] = [0; OUTPUT_BUFFER_SIZE];
 
 // TODO: calculate gaussian matrix    https://en.wikipedia.org/wiki/Gaussian_blur
 const BLUR_SIZE: usize = 7;
-const EDGE_DELTA :i32 = ((BLUR_SIZE - 1) / 2) as i32;
+const EDGE_DELTA: i32 = ((BLUR_SIZE - 1) / 2) as i32;
 
 const BLUR: [[f32; BLUR_SIZE]; BLUR_SIZE] = [
     [0.00000067, 0.00002292, 0.00019117, 0.00038771, 0.00019117, 0.00002292, 0.00000067],
@@ -31,23 +31,28 @@ const BLUR: [[f32; BLUR_SIZE]; BLUR_SIZE] = [
     [0.00000067, 0.00002292, 0.00019117, 0.00038771, 0.00019117, 0.00002292, 0.00000067]
 ];
 
-fn get_pixel(x: i32, y:i32) -> u8 {
+fn get_pixel(x: i32, y: i32, offset: i32) -> u8 {
     let pixel: u8;
     unsafe {
-        let index = y * IMAGE_SIZE_HEIGHT as i32 + x;
+        let index = 4 * (y * IMAGE_SIZE_HEIGHT as i32 + x) + offset;
         pixel = OUTPUT_BUFFER[index as usize]
     }
     pixel
 }
 
-fn blur_spot(x:i32, y:i32) -> u8 {
-    let mut result = 0.0;
-    for (col_index, col_delta) in (-EDGE_DELTA..EDGE_DELTA).enumerate() {
-        for (row_index, row_delta) in (-EDGE_DELTA..EDGE_DELTA).enumerate() {
-            result += BLUR[col_index][row_index] * get_pixel(x + row_delta, y + col_delta) as f32;
+fn blur_pixel(x: i32, y: i32) -> Vec<u8> {
+    let mut result2: Vec<u8> = Vec::new();
+    for offset in 0..3 {
+        let mut result = 0.0;
+        for (col_index, col_delta) in (-EDGE_DELTA..EDGE_DELTA).enumerate() {
+            for (row_index, row_delta) in (-EDGE_DELTA..EDGE_DELTA).enumerate() {
+                result += BLUR[col_index][row_index] * get_pixel(x + col_delta, y + row_delta, offset) as f32;
+            }
         }
+        result2.push(result as u8);
     }
-    result as u8
+    result2.push(255);
+    result2
 }
 
 #[wasm_bindgen]
@@ -59,28 +64,59 @@ pub fn get_output_buffer_pointer() -> *const u8 {
     pointer
 }
 
+#[wasm_bindgen]
+pub fn save_image(buffer: Box<[u8]>) {
+    unsafe {
+        for index in 0..100 * 100 * 4 {
+            OUTPUT_BUFFER[index] = buffer[index];
+        }
+    }
+}
 
 #[wasm_bindgen]
 pub fn blur_all() {
     blur(0, 0, IMAGE_SIZE_WIDTH as i32, IMAGE_SIZE_HEIGHT as i32)
 }
 
-pub fn blur( x : i32, y: i32, dx: i32, dy: i32) {
-    let mut rows: Vec<Vec<u8>> = Vec::new();
-    // create a new 2d matrix of the blurred region
-    for row in y + EDGE_DELTA..y + dy + EDGE_DELTA {
-        let mut row_data: Vec<u8> = Vec::new();
-        for col in x + EDGE_DELTA..x + dx + EDGE_DELTA {
-            row_data.push(blur_spot(row, col))
-        }
-        rows.push(row_data)
-    }
-    // put back into shared array
-    for (row_index, row_data) in rows.iter().enumerate() {
-        for (col_index, col_value) in row_data.iter().enumerate() {
-            unsafe {
-                OUTPUT_BUFFER[row_index * IMAGE_SIZE_HEIGHT + col_index] = *col_value;
+fn top_bottom_fill(row_offset: i32) -> Vec<u8> {
+    let mut data: Vec<u8> = Vec::new();
+    for row in 0..EDGE_DELTA {
+        for col in 0..IMAGE_SIZE_WIDTH {
+            for offset in 0..3 {
+                data.push(get_pixel(col as i32, row + row_offset, offset));
             }
+            data.push(255);
+        }
+    }
+    data
+}
+
+fn left_right_fill(row: i32, col_offset: i32) -> Vec<u8> {
+    let mut data: Vec<u8> = Vec::new();
+    for tmp_col in 0..EDGE_DELTA {
+        for offset in 0..3 {
+            data.push(get_pixel(tmp_col + col_offset, row, offset));
+        }
+        data.push(255);
+    }
+    data
+}
+
+pub fn blur(x: i32, y: i32, dx: i32, dy: i32) {
+    let mut data: Vec<u8> = Vec::new();
+    data.extend_from_slice(&top_bottom_fill(0));
+    for row in y + EDGE_DELTA..y + dy - EDGE_DELTA {
+        data.extend_from_slice(&left_right_fill(row, 0));
+        for col in x + EDGE_DELTA..x + dx - EDGE_DELTA {
+            data.extend_from_slice(&blur_pixel(col, row));
+        }
+        data.extend_from_slice(&left_right_fill(row, IMAGE_SIZE_WIDTH as i32 - EDGE_DELTA));
+    }
+    data.extend_from_slice(&top_bottom_fill(IMAGE_SIZE_HEIGHT as i32 - EDGE_DELTA));
+    // put back into shared array
+    for (index, value) in data.iter().enumerate() {
+        unsafe {
+            OUTPUT_BUFFER[index] = *value;
         }
     }
 }
