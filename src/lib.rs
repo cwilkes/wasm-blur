@@ -30,8 +30,7 @@ pub fn get_output_buffer_pointer() -> *const u8 {
 
 #[wasm_bindgen]
 pub fn save_image(buffer: Box<[u8]>) {
-    let msg1 = format!("Saving image {}", buffer.len());
-    console::log_1(&JsValue::from_str(&msg1));
+    log(&format!("Saving image len {}", buffer.len()));
     unsafe {
         // for index in 0..100 * 100 * 4 {
         for (index, val) in buffer.iter().enumerate() {

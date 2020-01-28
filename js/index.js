@@ -2,105 +2,73 @@ let rustPromise = import("../pkg/index.js");
 let wasmPromise = import ("../pkg/index_bg.wasm");
 
 
-function handleFiles() {
-    const reader = new FileReader();
-    reader.onload = function (e1) {
-        var image = new Image();
-        image.onload = function(e2) {
-            doShade(image);
-        };
-        image.src = reader.result;
-    }
-    // reader.readAsBinaryString(this.files[0]);
-    reader.readAsDataURL(this.files[0]);
+// handle upload and launch bluring process
+function fileUpload() {
+  const reader = new FileReader();
+  reader.onload = function (e1) {
+    var image = new Image();
+    image.onload = function(e2) {
+      setupBlurring(image);
+    };
+    image.src = reader.result;
+  }
+  reader.readAsDataURL(this.files[0]);
 }
-document.getElementById("file_upload").addEventListener("change", handleFiles, false);
+document.getElementById("file_upload").addEventListener("change", fileUpload, false);
 
-async function doShade(image) {
-    console.log('In doShade');
+
+// saves the image into rust's memory and launches
+// a blurring task on a timer
+async function setupBlurring(image) {
     const width = image.width;
     const height = image.height;
 
     let rust = await rustPromise;
-    let wasm = await wasmPromise;
-
-    let rustMemory = new Uint8Array(wasm.memory.buffer);
-
-    let bufferPointer = rust.get_output_buffer_pointer();
 
     const canvasElement = document.querySelector("canvas");
-    const ctx = canvasElement.getContext("2d");
-
     canvasElement.width = width;
     canvasElement.height = height;
+    const ctx = canvasElement.getContext("2d");
+
 
     ctx.drawImage(image, 0, 0, width, height);
 
-    const imageDataArray = rustMemory.slice(
-        bufferPointer,
-        bufferPointer + width * height * 4
-    );
-
-    // const canvasImageData = ctx.createImageData(width, height);
     const canvasImageData = ctx.getImageData(0, 0, width, height);
-
-    // canvasImageData.data.set(imageDataArray);
-    // ctx.clearRect(0, 0, width, height);
-
-    // ctx.putImageData(canvasImageData, 0, 0);
-
     console.log('Saving image', canvasImageData);
-    //  Uint8ClampedArray(1090560)
     rust.save_image(canvasImageData.data);
-
-    // make a box around canvas to more easily see it
-    ctx.beginPath();
-    ctx.lineWidth = "1";
-    ctx.strokeStyle = "red";
-    ctx.rect(0, 0, width, height);
-    ctx.stroke();
-
-    console.log('Start blur')
+    console.log('Start blur');
     setInterval(doBlur,500);
-    console.log('end blur')
+}
 
-};
 
+// Runs the blurring task in rust
 const doBlur = async () => {
     console.log('In doBlur');
 
     let rust = await rustPromise;
     let wasm = await wasmPromise;
 
-    try {
-        rust.blur_all();
-    } catch (err) {
-        console.log("Error in blur all ", err.message);
-    }
+    // in rust run the blurring code
+    rust.blur_all();
 
-    let rustMemory = new Uint8Array(wasm.memory.buffer);
-
-    let bufferPointer = rust.get_output_buffer_pointer();
-
+    // get a handle on the canvas element
     const canvasElement = document.querySelector("canvas");
     const ctx = canvasElement.getContext("2d");
     const width = canvasElement.width;
     const height = canvasElement.height;
+
+    // read in the rust memory of the manipulated image
+    let rustMemory = new Uint8Array(wasm.memory.buffer);
+    let bufferPointer = rust.get_output_buffer_pointer();
     const imageDataArray = rustMemory.slice(
         bufferPointer,
         bufferPointer + width * height * 4
     );
-    const canvasImageData = ctx.createImageData(width, height);
 
+    // write that image data into the canvas element
+    const canvasImageData = ctx.createImageData(width, height);
     canvasImageData.data.set(imageDataArray);
     ctx.clearRect(0, 0, width, height);
-    console.log("Setting array ", canvasImageData);
     ctx.putImageData(canvasImageData, 0, 0);
-    console.log('Done');
 
 };
-//
-// doShade().then(_ => {
-//     setInterval(doBlur,10000);
-// }
-// );
