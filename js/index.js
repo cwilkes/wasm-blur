@@ -22,6 +22,7 @@ document.getElementById("file_upload").addEventListener("change", fileUpload, fa
 async function setupBlurring(image) {
     const width = image.width;
     const height = image.height;
+    console.log('Image width', width, 'height', height);
 
     let rust = await rustPromise;
 
@@ -35,9 +36,12 @@ async function setupBlurring(image) {
 
     const canvasImageData = ctx.getImageData(0, 0, width, height);
     console.log('Saving image', canvasImageData);
-    rust.save_image(canvasImageData.data);
+    let max_pixels = rust.save_image(canvasImageData.data);
+    // now resize canvas to fit within rust's buffer
+    canvasElement.height = max_pixels / width;
+
     console.log('Start blur');
-    setInterval(doBlur,500);
+    setInterval(doBlur,5000);
 }
 
 
@@ -48,14 +52,14 @@ const doBlur = async () => {
     let rust = await rustPromise;
     let wasm = await wasmPromise;
 
-    // in rust run the blurring code
-    rust.blur_all();
-
     // get a handle on the canvas element
     const canvasElement = document.querySelector("canvas");
     const ctx = canvasElement.getContext("2d");
     const width = canvasElement.width;
     const height = canvasElement.height;
+
+    // in rust run the blurring code
+    rust.blur_all(width, height);
 
     // read in the rust memory of the manipulated image
     let rustMemory = new Uint8Array(wasm.memory.buffer);
