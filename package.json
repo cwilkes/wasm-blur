@@ -1,6 +1,6 @@
 {
-  "author": "You <you@example.com>",
-  "name": "rust-webpack-template",
+  "author": "Chris Wilkes <cwilkes@gmail.com>",
+  "name": "@cwilkes/gaussian_blur",
   "version": "0.1.0",
   "scripts": {
     "build": "rimraf dist pkg && webpack",

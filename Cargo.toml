@@ -1,9 +1,9 @@
 # You must change these to your own details.
 [package]
-name = "rust-webpack-template"
-description = "My super awesome Rust, WebAssembly, and Webpack project!"
+name = "gaussian_blur"
+description = "Gaussian Blur WASM demo"
 version = "0.1.0"
-authors = ["You <you@example.com>"]
+authors = ["Chris Wilkes <gwilkes@gmail.com>"]
 categories = ["wasm"]
 readme = "README.md"
 edition = "2018"
