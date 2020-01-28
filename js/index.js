@@ -18,6 +18,8 @@ document.getElementById("file_upload").addEventListener("change", handleFiles, f
 
 async function doShade(image) {
     console.log('In doShade');
+    const width = image.width;
+    const height = image.height;
 
     let rust = await rustPromise;
     let wasm = await wasmPromise;
@@ -29,81 +31,53 @@ async function doShade(image) {
     const canvasElement = document.querySelector("canvas");
     const ctx = canvasElement.getContext("2d");
 
-    ctx.drawImage(image, 0, 0, image.width, image.height);
-    return;
-    
-    const width = canvasElement.width;
-    const height = canvasElement.height;
+    canvasElement.width = width;
+    canvasElement.height = height;
+
+    ctx.drawImage(image, 0, 0, width, height);
+
     const imageDataArray = rustMemory.slice(
         bufferPointer,
         bufferPointer + width * height * 4
     );
 
-    const canvasImageData = ctx.createImageData(width, height);
+    // const canvasImageData = ctx.createImageData(width, height);
+    const canvasImageData = ctx.getImageData(0, 0, width, height);
 
-    
+    // canvasImageData.data.set(imageDataArray);
+    // ctx.clearRect(0, 0, width, height);
 
-    // var row, col;
-    // var index = 0;
-    // for (row = 0; row < height; row++) {
-    //     for (col = 0; col < width; col++) {
-    //         // imageDataArray[index++] = 256.0 * col / width;
-    //         color = 256.0 * col / width;
-    //         imageDataArray[4 * index + 0] = color;
-    //         imageDataArray[4 * index + 1] = color;
-    //         imageDataArray[4 * index + 2] = color;
-    //         imageDataArray[4 * index + 3] = 255;
-    //         index++;
-    //     }
-    // }
-    //
-    // for (row = height / 4 ; row < 3*height/4; row++) {
-    //     index = 4 * row * height + 4 * width / 4;
-    //     imageDataArray[index + 0] = 0;
-    //     imageDataArray[index + 1] = 0;
-    //     imageDataArray[index + 2] = 0;
-    //     imageDataArray[index + 4 * width/2 + 0] = 0;
-    //     imageDataArray[index + 4 * width/2 + 1] = 0;
-    //     imageDataArray[index + 4 * width/2 + 2] = 0;
-    // }
-    // for (col = width / 4; col < 3 * width / 4; col++) {
-    //     row = height / 4;
-    //     index = 4 * row * height + 4 * col;
-    //     imageDataArray[index + 0] = 0;
-    //     imageDataArray[index + 1] = 0;
-    //     imageDataArray[index + 2] = 0;
-    //     row = 3 * height / 4;
-    //     index = 4 * row * height + 4 * col;
-    //     imageDataArray[index + 0] = 0;
-    //     imageDataArray[index + 1] = 0;
-    //     imageDataArray[index + 2] = 0;
-    //
-    //
-    // }
+    // ctx.putImageData(canvasImageData, 0, 0);
 
-
-    canvasImageData.data.set(imageDataArray);
-    ctx.clearRect(0, 0, width, height);
-
-    ctx.putImageData(canvasImageData, 0, 0);
-
-    rust.save_image(imageDataArray);
-
+    console.log('Saving image', canvasImageData);
+    //  Uint8ClampedArray(1090560)
+    rust.save_image(canvasImageData.data);
 
     // make a box around canvas to more easily see it
     ctx.beginPath();
     ctx.lineWidth = "1";
     ctx.strokeStyle = "red";
-    ctx.rect(0, 0, 100, 100);
+    ctx.rect(0, 0, width, height);
     ctx.stroke();
+
+    console.log('Start blur')
+    // setInterval(doBlur,500);
+    doBlur();
+    console.log('end blur')
+
 };
 
 const doBlur = async () => {
+    console.log('In doBlur');
 
     let rust = await rustPromise;
     let wasm = await wasmPromise;
 
-    rust.blur_all();
+    try {
+        rust.blur_all();
+    } catch (err) {
+        console.log("Error in blur all ", err.message);
+    }
 
     let rustMemory = new Uint8Array(wasm.memory.buffer);
 

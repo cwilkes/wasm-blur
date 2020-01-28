@@ -1,5 +1,8 @@
 use wasm_bindgen::prelude::*;
 use web_sys::console;
+use std::format;
+use std::mem;
+// use js_sys::buffer;
 
 
 // When the `wee_alloc` feature is enabled, this uses `wee_alloc` as the global
@@ -10,12 +13,13 @@ use web_sys::console;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-const IMAGE_SIZE_WIDTH: usize = 100;
-const IMAGE_SIZE_HEIGHT: usize = 100;
+const IMAGE_SIZE_WIDTH: usize = 640;
+const IMAGE_SIZE_HEIGHT: usize = 426;
 
 // times 4 for the four colors (r,g,b,a)
 const OUTPUT_BUFFER_SIZE: usize = IMAGE_SIZE_WIDTH * IMAGE_SIZE_HEIGHT * 4;
 static mut OUTPUT_BUFFER: [u8; OUTPUT_BUFFER_SIZE] = [0; OUTPUT_BUFFER_SIZE];
+static mut BUFFER_SCRATCH: [u8; OUTPUT_BUFFER_SIZE] = [0; OUTPUT_BUFFER_SIZE];
 
 // TODO: calculate gaussian matrix    https://en.wikipedia.org/wiki/Gaussian_blur
 const BLUR_SIZE: usize = 7;
@@ -34,7 +38,7 @@ const BLUR: [[f32; BLUR_SIZE]; BLUR_SIZE] = [
 fn get_pixel(x: i32, y: i32, offset: i32) -> u8 {
     let pixel: u8;
     unsafe {
-        let index = 4 * (y * IMAGE_SIZE_HEIGHT as i32 + x) + offset;
+        let index = 4 * (y * IMAGE_SIZE_WIDTH as i32 + x) + offset;
         pixel = OUTPUT_BUFFER[index as usize]
     }
     pixel
@@ -66,59 +70,90 @@ pub fn get_output_buffer_pointer() -> *const u8 {
 
 #[wasm_bindgen]
 pub fn save_image(buffer: Box<[u8]>) {
+    let msg1 = format!("Saving image {}", buffer.len());
+    console::log_1(&JsValue::from_str(&msg1));
     unsafe {
-        for index in 0..100 * 100 * 4 {
-            OUTPUT_BUFFER[index] = buffer[index];
+        // for index in 0..100 * 100 * 4 {
+        for (index, val) in buffer.iter().enumerate() {
+            if index >= OUTPUT_BUFFER_SIZE {
+                break;
+            }
+            // let msg = format!("Saving image {} {}", index, val);
+            // console::log_1(&JsValue::from_str(&msg));
+            OUTPUT_BUFFER[index] = *val;
         }
     }
+}
+
+fn log(s: &str) {
+    console::log_1(&JsValue::from_str(s));
 }
 
 #[wasm_bindgen]
 pub fn blur_all() {
-    blur(0, 0, IMAGE_SIZE_WIDTH as i32, IMAGE_SIZE_HEIGHT as i32)
+    log("Blur All");
+    blur(0, 0, IMAGE_SIZE_WIDTH as i32, IMAGE_SIZE_HEIGHT as i32);
+    log("Done blur all");
 }
 
-fn top_bottom_fill(row_offset: i32) -> Vec<u8> {
-    let mut data: Vec<u8> = Vec::new();
+
+fn top_bottom_fill2(row_offset: i32) {
     for row in 0..EDGE_DELTA {
         for col in 0..IMAGE_SIZE_WIDTH {
+            let index = 4 * ((row + row_offset) * IMAGE_SIZE_WIDTH as i32 + col as i32);
             for offset in 0..3 {
-                data.push(get_pixel(col as i32, row + row_offset, offset));
+                set_pixel(index + offset, get_pixel(col as i32, row + row_offset, offset));
             }
-            data.push(255);
+            set_pixel(index + 3, 255);
         }
     }
-    data
 }
 
-fn left_right_fill(row: i32, col_offset: i32) -> Vec<u8> {
-    let mut data: Vec<u8> = Vec::new();
+
+fn left_right_fill2(row: i32, col_offset: i32) {
     for tmp_col in 0..EDGE_DELTA {
+        let index = 4 * (row * IMAGE_SIZE_WIDTH as i32 + tmp_col as i32 + col_offset);
         for offset in 0..3 {
-            data.push(get_pixel(tmp_col + col_offset, row, offset));
+             set_pixel(index + offset, get_pixel(tmp_col , row, offset));
         }
-        data.push(255);
+        set_pixel(index + 3, 255);
     }
-    data
 }
+
+fn set_pixel(index: i32, value: u8) {
+    unsafe {
+        BUFFER_SCRATCH[index as usize] = value;
+    }
+}
+
 
 pub fn blur(x: i32, y: i32, dx: i32, dy: i32) {
-    let mut data: Vec<u8> = Vec::new();
-    data.extend_from_slice(&top_bottom_fill(0));
+    log("Start Saving");
+    // let mut data: Vec<u8> = Vec::with_capacity(OUTPUT_BUFFER_SIZE);
+
+    top_bottom_fill2(0);
+
     for row in y + EDGE_DELTA..y + dy - EDGE_DELTA {
-        data.extend_from_slice(&left_right_fill(row, 0));
+        left_right_fill2(row, 0);
         for col in x + EDGE_DELTA..x + dx - EDGE_DELTA {
-            data.extend_from_slice(&blur_pixel(col, row));
+            for (index, value) in blur_pixel(col, row).iter().enumerate() {
+                 set_pixel(4* (row * IMAGE_SIZE_WIDTH as i32 + col) + index as i32, *value);
+            }
         }
-        data.extend_from_slice(&left_right_fill(row, IMAGE_SIZE_WIDTH as i32 - EDGE_DELTA));
+        left_right_fill2(row, IMAGE_SIZE_WIDTH as i32 - EDGE_DELTA);
     }
-    data.extend_from_slice(&top_bottom_fill(IMAGE_SIZE_HEIGHT as i32 - EDGE_DELTA));
+
+    top_bottom_fill2(IMAGE_SIZE_HEIGHT as i32 - EDGE_DELTA);
     // put back into shared array
-    for (index, value) in data.iter().enumerate() {
-        unsafe {
-            OUTPUT_BUFFER[index] = *value;
-        }
-    }
+    // let msg1 = format!("Vector size {}", data.len());
+    // console::log_1(&JsValue::from_str(&msg1));
+    log("Copying buffer");
+     unsafe {
+        OUTPUT_BUFFER[..OUTPUT_BUFFER_SIZE].clone_from_slice(&BUFFER_SCRATCH);
+        // mem::replace(&mut OUTPUT_BUFFER, BUFFER_SCRATCH);
+     }
+
+    log("Done saving");
 }
 
 // This is like the `main` function, except for JavaScript.
