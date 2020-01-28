@@ -3,6 +3,7 @@ use web_sys::console;
 use std::format;
 use std::mem;
 // use js_sys::buffer;
+use fastblur::gaussian_blur;
 
 
 // When the `wee_alloc` feature is enabled, this uses `wee_alloc` as the global
@@ -92,8 +93,25 @@ fn log(s: &str) {
 #[wasm_bindgen]
 pub fn blur_all() {
     log("Blur All");
-    blur(0, 0, IMAGE_SIZE_WIDTH as i32, IMAGE_SIZE_HEIGHT as i32);
-    log("Done blur all");
+    // blur(0, 0, IMAGE_SIZE_WIDTH as i32, IMAGE_SIZE_HEIGHT as i32);
+    let mut data: Vec<[u8; 3]> = Vec::new();
+    for row in 0..IMAGE_SIZE_HEIGHT {
+        for col in 0..IMAGE_SIZE_WIDTH {
+            data.push([
+                 get_pixel(col as i32, row as i32, 0),
+                 get_pixel(col as i32, row as i32, 1),
+                 get_pixel(col as i32, row as i32, 2)
+            ]);
+        }
+    }
+    log(&format!("RGB data size {}", data.len()));
+
+    gaussian_blur(&mut data, IMAGE_SIZE_WIDTH, IMAGE_SIZE_HEIGHT, 1.0);
+    for (index, val) in data.iter().enumerate() {
+        set_pixel((4 * index) as i32+0, val[0]);
+        set_pixel((4 * index) as i32+1, val[1]);
+        set_pixel((4 * index) as i32+2, val[2]);
+    }
 }
 
 
@@ -114,7 +132,7 @@ fn left_right_fill2(row: i32, col_offset: i32) {
     for tmp_col in 0..EDGE_DELTA {
         let index = 4 * (row * IMAGE_SIZE_WIDTH as i32 + tmp_col as i32 + col_offset);
         for offset in 0..3 {
-             set_pixel(index + offset, get_pixel(tmp_col , row, offset));
+            set_pixel(index + offset, get_pixel(tmp_col, row, offset));
         }
         set_pixel(index + 3, 255);
     }
@@ -122,7 +140,7 @@ fn left_right_fill2(row: i32, col_offset: i32) {
 
 fn set_pixel(index: i32, value: u8) {
     unsafe {
-        BUFFER_SCRATCH[index as usize] = value;
+        OUTPUT_BUFFER[index as usize] = value;
     }
 }
 
@@ -137,7 +155,7 @@ pub fn blur(x: i32, y: i32, dx: i32, dy: i32) {
         left_right_fill2(row, 0);
         for col in x + EDGE_DELTA..x + dx - EDGE_DELTA {
             for (index, value) in blur_pixel(col, row).iter().enumerate() {
-                 set_pixel(4* (row * IMAGE_SIZE_WIDTH as i32 + col) + index as i32, *value);
+                set_pixel(4 * (row * IMAGE_SIZE_WIDTH as i32 + col) + index as i32, *value);
             }
         }
         left_right_fill2(row, IMAGE_SIZE_WIDTH as i32 - EDGE_DELTA);
@@ -148,10 +166,10 @@ pub fn blur(x: i32, y: i32, dx: i32, dy: i32) {
     // let msg1 = format!("Vector size {}", data.len());
     // console::log_1(&JsValue::from_str(&msg1));
     log("Copying buffer");
-     unsafe {
+    unsafe {
         OUTPUT_BUFFER[..OUTPUT_BUFFER_SIZE].clone_from_slice(&BUFFER_SCRATCH);
         // mem::replace(&mut OUTPUT_BUFFER, BUFFER_SCRATCH);
-     }
+    }
 
     log("Done saving");
 }

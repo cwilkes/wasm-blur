@@ -61,8 +61,7 @@ async function doShade(image) {
     ctx.stroke();
 
     console.log('Start blur')
-    // setInterval(doBlur,500);
-    doBlur();
+    setInterval(doBlur,500);
     console.log('end blur')
 
 };
@@ -95,8 +94,9 @@ const doBlur = async () => {
 
     canvasImageData.data.set(imageDataArray);
     ctx.clearRect(0, 0, width, height);
-
+    console.log("Setting array ", canvasImageData);
     ctx.putImageData(canvasImageData, 0, 0);
+    console.log('Done');
 
 };
 //

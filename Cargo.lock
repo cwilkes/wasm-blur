@@ -29,6 +29,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastblur"
+version = "0.1.0"
+source = "git+https://github.com/fschutt/fastblur#d1b3bff65d2c54f0116d11370e336df4f5f7ae0f"
+
+[[package]]
 name = "futures"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -39,6 +44,7 @@ name = "gaussian_blur"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "fastblur",
  "futures",
  "js-sys",
  "wasm-bindgen",
