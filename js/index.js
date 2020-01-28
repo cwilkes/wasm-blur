@@ -3,16 +3,21 @@ let wasmPromise = import ("../pkg/index_bg.wasm");
 
 
 function handleFiles() {
-    const file = this.files[0];
     const reader = new FileReader();
-    reader.onload = function () {
-        console.log("res", reader.result.length);
+    reader.onload = function (e1) {
+        var image = new Image();
+        image.onload = function(e2) {
+            doShade(image);
+        };
+        image.src = reader.result;
     }
-    reader.readAsBinaryString(file);
+    // reader.readAsBinaryString(this.files[0]);
+    reader.readAsDataURL(this.files[0]);
 }
 document.getElementById("file_upload").addEventListener("change", handleFiles, false);
 
-const doShade = async () => {
+async function doShade(image) {
+    console.log('In doShade');
 
     let rust = await rustPromise;
     let wasm = await wasmPromise;
@@ -23,6 +28,10 @@ const doShade = async () => {
 
     const canvasElement = document.querySelector("canvas");
     const ctx = canvasElement.getContext("2d");
+
+    ctx.drawImage(image, 0, 0, image.width, image.height);
+    return;
+    
     const width = canvasElement.width;
     const height = canvasElement.height;
     const imageDataArray = rustMemory.slice(
@@ -32,43 +41,45 @@ const doShade = async () => {
 
     const canvasImageData = ctx.createImageData(width, height);
 
-    var row, col;
-    var index = 0;
-    for (row = 0; row < height; row++) {
-        for (col = 0; col < width; col++) {
-            // imageDataArray[index++] = 256.0 * col / width;
-            color = 256.0 * col / width;
-            imageDataArray[4 * index + 0] = color;
-            imageDataArray[4 * index + 1] = color;
-            imageDataArray[4 * index + 2] = color;
-            imageDataArray[4 * index + 3] = 255;
-            index++;
-        }
-    }
+    
 
-    for (row = height / 4 ; row < 3*height/4; row++) {
-        index = 4 * row * height + 4 * width / 4;
-        imageDataArray[index + 0] = 0;
-        imageDataArray[index + 1] = 0;
-        imageDataArray[index + 2] = 0;
-        imageDataArray[index + 4 * width/2 + 0] = 0;
-        imageDataArray[index + 4 * width/2 + 1] = 0;
-        imageDataArray[index + 4 * width/2 + 2] = 0;
-    }
-    for (col = width / 4; col < 3 * width / 4; col++) {
-        row = height / 4;
-        index = 4 * row * height + 4 * col;
-        imageDataArray[index + 0] = 0;
-        imageDataArray[index + 1] = 0;
-        imageDataArray[index + 2] = 0;
-        row = 3 * height / 4;
-        index = 4 * row * height + 4 * col;
-        imageDataArray[index + 0] = 0;
-        imageDataArray[index + 1] = 0;
-        imageDataArray[index + 2] = 0;
-
-
-    }
+    // var row, col;
+    // var index = 0;
+    // for (row = 0; row < height; row++) {
+    //     for (col = 0; col < width; col++) {
+    //         // imageDataArray[index++] = 256.0 * col / width;
+    //         color = 256.0 * col / width;
+    //         imageDataArray[4 * index + 0] = color;
+    //         imageDataArray[4 * index + 1] = color;
+    //         imageDataArray[4 * index + 2] = color;
+    //         imageDataArray[4 * index + 3] = 255;
+    //         index++;
+    //     }
+    // }
+    //
+    // for (row = height / 4 ; row < 3*height/4; row++) {
+    //     index = 4 * row * height + 4 * width / 4;
+    //     imageDataArray[index + 0] = 0;
+    //     imageDataArray[index + 1] = 0;
+    //     imageDataArray[index + 2] = 0;
+    //     imageDataArray[index + 4 * width/2 + 0] = 0;
+    //     imageDataArray[index + 4 * width/2 + 1] = 0;
+    //     imageDataArray[index + 4 * width/2 + 2] = 0;
+    // }
+    // for (col = width / 4; col < 3 * width / 4; col++) {
+    //     row = height / 4;
+    //     index = 4 * row * height + 4 * col;
+    //     imageDataArray[index + 0] = 0;
+    //     imageDataArray[index + 1] = 0;
+    //     imageDataArray[index + 2] = 0;
+    //     row = 3 * height / 4;
+    //     index = 4 * row * height + 4 * col;
+    //     imageDataArray[index + 0] = 0;
+    //     imageDataArray[index + 1] = 0;
+    //     imageDataArray[index + 2] = 0;
+    //
+    //
+    // }
 
 
     canvasImageData.data.set(imageDataArray);
@@ -114,8 +125,8 @@ const doBlur = async () => {
     ctx.putImageData(canvasImageData, 0, 0);
 
 };
-
-doShade().then(_ => {
-    setInterval(doBlur,10000);
-}
-);
+//
+// doShade().then(_ => {
+//     setInterval(doBlur,10000);
+// }
+// );
